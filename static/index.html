@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Stockinput Manager - AI Scanner</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ef4444; /* Modern Red */
+            --accent: #f59e0b; /* Amber/Gold */
+            --success: #22c55e;
+            --bg: #0f172a;
+            --panel: rgba(30, 41, 59, 0.7);
+            --border-color: rgba(255, 255, 255, 0.1);
+            --text-muted: #94a3b8;
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: white;
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-image: radial-gradient(circle at top right, rgba(239, 68, 68, 0.1), transparent),
+                              radial-gradient(circle at bottom left, rgba(245, 158, 11, 0.05), transparent);
+        }
+
+        .glass-panel {
+            background: var(--panel);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        header {
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .logo { font-size: 1.5rem; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+        .logo span { color: var(--primary); }
+
+        .nav-tabs {
+            display: flex;
+            gap: 10px;
+            padding: 15px;
+            justify-content: center;
+        }
+
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border-color);
+            padding: 12px 24px;
+            border-radius: 12px;
+            color: var(--text-muted);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .tab-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 10px 20px -10px var(--primary);
+        }
+
+        main { flex: 1; padding: 20px; max-width: 1200px; margin: 0 auto; width: 100%; }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fadeIn 0.4s ease; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Scanner View */
+        .scanner-card {
+            padding: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .camera-circle {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            background: linear-gradient(135, var(--primary), #b91c1c);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 20px 40px -10px rgba(239, 68, 68, 0.4);
+        }
+
+        .camera-circle:hover { transform: scale(1.05); }
+        .camera-circle:active { transform: scale(0.95); }
+
+        #fileInput { display: none; }
+
+        .preview-box {
+            width: 100%;
+            max-width: 400px;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 2px solid var(--primary);
+            position: relative;
+            display: none;
+            margin-top: 20px;
+        }
+
+        .preview-box img { width: 100%; display: block; }
+
+        .scan-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--primary);
+            box-shadow: 0 0 15px var(--primary);
+            animation: scan 2s infinite;
+            display: none;
+        }
+
+        @keyframes scan { 0% { top: 0; } 100% { top: 100%; } }
+
+        /* Dashboard Table */
+        .table-container { overflow-x: auto; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; min-width: 600px; }
+        th { text-align: left; padding: 15px; color: var(--text-muted); font-weight: 500; font-size: 0.9rem; border-bottom: 1px solid var(--border-color); }
+        td { padding: 15px; border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+
+        .status-badge {
+            padding: 4px 10px;
+            border-radius: 50px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .badge-pending { background: rgba(245, 158, 11, 0.1); color: var(--accent); border: 1px solid rgba(245, 158, 11, 0.2); }
+        .badge-done { background: rgba(34, 197, 94, 0.1); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.2); }
+        .badge-processing { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
+
+        .action-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--border-color);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .action-btn:hover { background: var(--primary); border-color: var(--primary); }
+
+        .btn-confirm { background: var(--success); border-color: var(--success); width: 100%; padding: 15px; font-weight: 700; margin-top: 20px;}
+
+        /* Review Modal */
+        #review-modal {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);
+            z-index: 1000; display: none; align-items: center; justify-content:center; padding: 20px;
+        }
+
+        .hidden { display: none !important; }
+
+    </style>
+</head>
+<body>
+
+    <header>
+        <div class="logo">📦 Stock<span>input</span></div>
+        <div id="api-status" style="font-size: 0.8rem; color: var(--success);">● AI Server Active</div>
+    </header>
+
+    <div class="nav-tabs">
+        <button onclick="showView('scanner')" id="tab-scanner" class="tab-btn active">📷 Scanner</button>
+        <button onclick="showView('dashboard')" id="tab-dashboard" class="tab-btn">📁 Management Log</button>
+    </div>
+
+    <main>
+        <!-- MOBILE SCANNER VIEW -->
+        <div id="view-scanner" class="tab-content active">
+            <div class="glass-panel scanner-card">
+                <h2>Snap Invoice</h2>
+                <p style="color: var(--text-muted); max-width: 300px;">Take a photo. The AI will extract data automatically on the desktop.</p>
+                
+                <label for="fileInput" class="camera-circle">📷</label>
+                <input type="file" id="fileInput" accept="image/*" capture="environment">
+
+                <div id="preview-box" class="preview-box">
+                    <img id="preview-img" src="" alt="Invoice">
+                    <div id="scan-line" class="scan-line"></div>
+                </div>
+
+                <div id="upload-status" style="font-weight: 600; font-size: 1.1rem;">Ready to Scan</div>
+                
+                <button id="btn-next" onclick="resetScanner()" class="tab-btn active hidden" style="width: 100%; max-width: 400px;">
+                    🔄 Scan Next
+                </button>
+            </div>
+        </div>
+
+        <!-- MANAGEMENT DASHBOARD VIEW -->
+        <div id="view-dashboard" class="tab-content">
+            <div class="glass-panel" style="padding: 30px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 30px; margin-bottom: 30px;">
+                    <div>
+                        <h2>Management Dashboard</h2>
+                        <p style="color: var(--text-muted); margin-top: -10px;">Review pending scans and export finalized data.</p>
+                    </div>
+                    <div class="glass-panel" style="padding: 15px; text-align: center; border-color: var(--primary);">
+                        <img id="qr-image" src="/static/qr_code.png?v=${Date.now()}" alt="Connect Phone" style="width: 150px; height: 150px; background: white; border-radius: 10px; padding: 5px;">
+                        <div style="font-size: 0.75rem; color: var(--primary); font-weight: 700; margin-top: 5px;">📱 SCAN TO OPEN ON PHONE</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400; margin-top: 5px;">{{ url }}</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 40px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="color: var(--accent);">⏳ Pending Review</h3>
+                        <button class="action-btn" onclick="clearPending()" style="font-size: 0.7rem; color: var(--text-muted);">🗑️ Clear All Pending</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="pending-table">
+                            <thead>
+                                <tr>
+                                    <th>Timestamp</th>
+                                    <th>Filename</th>
+                                    <th>Status</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Pending injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                        <h3 style="color: var(--success);">✅ Finalized Stock</h3>
+                        <button class="action-btn" onclick="exportExcel()">📊 Export All (Excel)</button>
+                    </div>
+                    <div class="table-container">
+                        <table id="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Date</th>
+                                    <th>Supplier</th>
+                                    <th>Items</th>
+                                    <th>Total</th>
+                                    <th>Image</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- History injected here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- DESKTOP REVIEW MODAL -->
+    <div id="review-modal">
+        <div class="glass-panel" style="width: 100%; max-width: 1200px; padding: 40px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px;">
+                <h2 id="modal-title">Review Extraction</h2>
+                <button onclick="closeReview()" style="background: none; border: none; color: white; cursor: pointer; font-size: 1.5rem;">✕</button>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px;">
+                <div style="border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); background: #000;">
+                    <img id="review-img" src="" style="width: 100%; display: block;" alt="Reference Photo">
+                </div>
+                <div style="display: flex; flex-direction: column;">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <h3>Extracted Data</h3>
+                        <span id="ai-supplier" style="color:var(--accent); font-weight:700;"></span>
+                    </div>
+                    <div id="review-items-container" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px;">
+                        <table id="review-items-table">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th width="60">Qty</th>
+                                    <th width="60">Unit</th>
+                                    <th width="100">Unit Price</th>
+                                    <th width="100">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                    <button class="action-btn btn-confirm" onclick="pushToFinal()">✅ Confirm & Push to Stock</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let latestLogData = null;
+        let currentReviewFilename = null;
+        let currentReviewExtraction = null;
+
+        function showView(viewId) {
+            document.querySelectorAll('.tab-content').forEach(v => v.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.getElementById('view-' + viewId).classList.add('active');
+            document.getElementById('tab-' + viewId).classList.add('active');
+            if(viewId === 'dashboard') loadLogs();
+        }
+
+        // --- Polling for Dashboard ---
+        setInterval(() => {
+            if (document.getElementById('view-dashboard').classList.contains('active')) {
+                loadLogs(true);
+            }
+        }, 3000);
+
+        // --- SCANNER LOGIC ---
+        const fileInput = document.getElementById('fileInput');
+        function resetScanner() {
+            fileInput.value = '';
+            document.getElementById('preview-box').style.display = 'none';
+            document.getElementById('btn-next').classList.add('hidden');
+            document.getElementById('upload-status').innerText = "Ready to Scan";
+            document.getElementById('scan-line').style.display = 'none';
+        }
+
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            // Show preview
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                document.getElementById('preview-img').src = event.target.result;
+                document.getElementById('preview-box').style.display = 'block';
+                document.getElementById('scan-line').style.display = 'block';
+            }
+            reader.readAsDataURL(file);
+
+            // AUTO UPLOAD
+            const formData = new FormData();
+            formData.append('file', file);
+            document.getElementById('upload-status').innerText = "⏳ Sending to Desktop...";
+
+            try {
+                const res = await fetch('/upload', { method: 'POST', body: formData });
+                const result = await res.json();
+                if (res.ok) {
+                    document.getElementById('upload-status').innerHTML = "✅ Uploaded!<br><span style='color:var(--text-muted); font-size:0.9rem;'>AI is processing on desktop.</span>";
+                    document.getElementById('btn-next').classList.remove('hidden');
+                    document.getElementById('scan-line').style.display = 'none';
+                }
+            } catch (err) {
+                document.getElementById('upload-status').innerText = "❌ Connection Error";
+            }
+        });
+
+        // --- DASHBOARD LOGIC ---
+        async function loadLogs(isPoll = false) {
+            try {
+                const res = await fetch('/api/logs');
+                const data = await res.json();
+                
+                // Pending Table
+                const pBody = document.querySelector('#pending-table tbody');
+                pBody.innerHTML = '';
+                const filenames = Object.keys(data.pending).sort((a,b) => b.localeCompare(a));
+                
+                if (filenames.length === 0) {
+                    pBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">No new scans waiting</td></tr>';
+                }
+
+                filenames.forEach(fn => {
+                    const item = data.pending[fn];
+                    let statusClass = 'badge-processing';
+                    let statusLabel = 'Processing...';
+                    let actionHtml = '';
+
+                    if (item.status === 'ready') {
+                        statusClass = 'badge-pending';
+                        statusLabel = 'Ready for Review';
+                        actionHtml = `<button class="action-btn" onclick="openReview('${fn}')">👁️ Review</button>`;
+                    } else if (item.status === 'failed') {
+                        statusClass = 'badge-pending'; // using same color
+                        statusLabel = 'AI Error';
+                        actionHtml = `<button class="action-btn" style="color:var(--primary)" onclick="alert('${item.error}')">⚠️ Log</button>`;
+                    }
+
+                    pBody.innerHTML += `
+                        <tr>
+                            <td>${item.timestamp}</td>
+                            <td style="font-size:0.8rem; color:var(--text-muted);">${fn}</td>
+                            <td><span class="status-badge ${statusClass}">${statusLabel}</span></td>
+                            <td>${actionHtml}</td>
+                        </tr>
+                    `;
+                });
+
+                // History Table
+                const hBody = document.querySelector('#history-table tbody');
+                hBody.innerHTML = '';
+                if (data.history.length === 0) {
+                    hBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No history yet</td></tr>';
+                }
+                data.history.sort((a,b) => b.date.localeCompare(a.date)).forEach(h => {
+                    hBody.innerHTML += `
+                        <tr>
+                            <td>${h.date}</td>
+                            <td style="font-weight:600;">${h.supplier}</td>
+                            <td>${h.item_count} pts</td>
+                            <td>R${h.total_value}</td>
+                            <td><a href="/static/uploads/${h.filename}" target="_blank" style="color:var(--accent); font-size:0.8rem;">📎 Image</a></td>
+                        </tr>
+                    `;
+                });
+
+            } catch (e) {
+                console.error("Dashboard poll failed", e);
+            }
+        }
+
+        async function clearPending() {
+            if(!confirm("Are you sure you want to clear all failed/pending scans?")) return;
+            await fetch('/api/clear_pending', { method: 'POST' });
+            loadLogs();
+        }
+
+        // --- REVIEW MODAL LOGIC ---
+        async function openReview(filename) {
+            currentReviewFilename = filename;
+            const res = await fetch(`/api/pending/${filename}`);
+            const pending = await res.json();
+            
+            currentReviewExtraction = pending.data;
+
+            document.getElementById('review-img').src = `/static/uploads/${filename}`;
+            document.getElementById('ai-supplier').innerText = currentReviewExtraction.supplier;
+            
+            const tbody = document.querySelector('#review-items-table tbody');
+            tbody.innerHTML = '';
+            currentReviewExtraction.items.forEach((item, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td><input type="text" class="action-btn" style="width:100%; border:none; background:none;" value="${item.description}" 
+                            onchange="currentReviewExtraction.items[${idx}].description = this.value"></td>
+                        <td><input type="text" class="action-btn" style="width:100%; border:none; background:none;" value="${item.qty}"
+                            onchange="currentReviewExtraction.items[${idx}].qty = this.value"></td>
+                        <td><input type="text" class="action-btn" style="width:100%; border:none; background:none;" value="${item.unit || ''}"
+                            onchange="currentReviewExtraction.items[${idx}].unit = this.value"></td>
+                        <td>R${item.unit_price}</td>
+                        <td style="font-weight:600;">R${item.total_price}</td>
+                    </tr>
+                `;
+            });
+
+            document.getElementById('review-modal').style.display = 'flex';
+        }
+
+        function closeReview() {
+            document.getElementById('review-modal').style.display = 'none';
+        }
+
+        async function pushToFinal() {
+            const btn = document.querySelector('.btn-confirm');
+            btn.innerText = "⏳ Saving...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch('/api/confirm', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: currentReviewFilename,
+                        extraction: currentReviewExtraction
+                    })
+                });
+                
+                if (response.ok) {
+                    closeReview();
+                    loadLogs();
+                } else {
+                    alert("Failed to save data.");
+                }
+            } catch (e) {
+                alert("Connection error");
+            } finally {
+                btn.innerText = "✅ Confirm & Push to Stock";
+                btn.disabled = false;
+            }
+        }
+
+        window.exportExcel = () => {
+            window.location.href = '/api/export';
+        };
+
+        // Initial Load
+        loadLogs();
+    </script>
+</body>
+</html>

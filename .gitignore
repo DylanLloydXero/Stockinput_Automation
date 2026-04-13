@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.env
+
+# Project specific
+data/
+output/
+static/uploads/
+static/qr_code.png
+config.json
+startup_log.txt
+test_ai.py
+list_models.py
+*.xlsx
+*.csv
+*.pdf
+*.jpg
+*.png
+
+# IDEs
+.vscode/
+.idea/
+.gemini/

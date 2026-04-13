@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+python-multipart
+pandas
+openpyxl
+google-genai
+python-dotenv
+jinja2
+Pillow
