@@ -96,7 +96,7 @@
             width: 180px;
             height: 180px;
             border-radius: 50%;
-            background: linear-gradient(135, var(--primary), #b91c1c);
+            background: linear-gradient(135deg, var(--primary), #b91c1c);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -153,6 +153,7 @@
         .badge-pending { background: rgba(245, 158, 11, 0.1); color: var(--accent); border: 1px solid rgba(245, 158, 11, 0.2); }
         .badge-done { background: rgba(34, 197, 94, 0.1); color: var(--success); border: 1px solid rgba(34, 197, 94, 0.2); }
         .badge-processing { background: rgba(59, 130, 246, 0.1); color: #3b82f6; border: 1px solid rgba(59, 130, 246, 0.2); }
+        .badge-queued { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid rgba(148, 163, 184, 0.2); }
 
         .action-btn {
             background: rgba(255, 255, 255, 0.05);
@@ -165,14 +166,71 @@
             transition: all 0.2s;
         }
         .action-btn:hover { background: var(--primary); border-color: var(--primary); }
+        
+        .review-input {
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.05);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 6px;
+            font-size: 0.85rem;
+            transition: all 0.2s;
+        }
+        .review-input:focus {
+            border-color: var(--accent);
+            outline: none;
+            background: rgba(255, 255, 255, 0.1);
+        }
 
         .btn-confirm { background: var(--success); border-color: var(--success); width: 100%; padding: 15px; font-weight: 700; margin-top: 20px;}
 
+        /* Processing Progress Counter */
+        .processing-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            color: #3b82f6;
+            padding: 5px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .processing-badge .dot {
+            width: 8px; height: 8px;
+            border-radius: 50%;
+            background: #3b82f6;
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.4; transform: scale(0.8); } }
+
         /* Review Modal */
+        body.no-scroll { overflow: hidden; }
+
+        /* Error toast */
+        .error-toast {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(239,68,68,0.9); color: white;
+            padding: 12px 24px; border-radius: 12px;
+            font-size: 0.9rem; font-weight: 600;
+            z-index: 9999; display: none;
+            max-width: 90vw; word-break: break-word;
+        }
+
         #review-modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);
-            z-index: 1000; display: none; align-items: center; justify-content:center; padding: 20px;
+            z-index: 1000; display: none; align-items: flex-start; justify-content:center; 
+            padding: 40px 20px; overflow-y: auto;
+        }
+
+        #image-viewer-modal {
+            position:fixed; top:0; left:0; width:100%; height:100%; 
+            background:rgba(0,0,0,0.9); z-index:2000; display:none; 
+            align-items:flex-start; justify-content:center; 
+            padding:60px 20px; overflow-y: auto;
         }
 
         .hidden { display: none !important; }
@@ -189,6 +247,7 @@
     <div class="nav-tabs">
         <button onclick="showView('scanner')" id="tab-scanner" class="tab-btn active">📷 Scanner</button>
         <button onclick="showView('dashboard')" id="tab-dashboard" class="tab-btn">📁 Management Log</button>
+        <button onclick="showView('archives')" id="tab-archives" class="tab-btn">📂 Archives</button>
     </div>
 
     <main>
@@ -199,7 +258,7 @@
                 <p style="color: var(--text-muted); max-width: 300px;">Take a photo. The AI will extract data automatically on the desktop.</p>
                 
                 <label for="fileInput" class="camera-circle">📷</label>
-                <input type="file" id="fileInput" accept="image/*" capture="environment">
+                <input type="file" id="fileInput" accept="image/*" multiple>
 
                 <div id="preview-box" class="preview-box">
                     <img id="preview-img" src="" alt="Invoice">
@@ -222,17 +281,36 @@
                         <h2>Management Dashboard</h2>
                         <p style="color: var(--text-muted); margin-top: -10px;">Review pending scans and export finalized data.</p>
                     </div>
-                    <div class="glass-panel" style="padding: 15px; text-align: center; border-color: var(--primary);">
-                        <img id="qr-image" src="/static/qr_code.png?v=${Date.now()}" alt="Connect Phone" style="width: 150px; height: 150px; background: white; border-radius: 10px; padding: 5px;">
-                        <div style="font-size: 0.75rem; color: var(--primary); font-weight: 700; margin-top: 5px;">📱 SCAN TO OPEN ON PHONE</div>
-                        <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400; margin-top: 5px;">{{ url }}</div>
+                    <div style="display:flex; flex-direction:column; align-items:flex-end; gap:12px;">
+                        <span id="processing-counter" class="processing-badge" style="display:none;">
+                            <span class="dot"></span>
+                            <span id="processing-count-text">0 Processing...</span>
+                        </span>
+                        <div class="glass-panel" style="padding: 15px; text-align: center; border-color: var(--primary);">
+                            <img id="qr-image" src="/static/qr_code.png" alt="Connect Phone" style="width: 150px; height: 150px; background: white; border-radius: 10px; padding: 5px;">
+                            <div style="font-size: 0.75rem; color: var(--primary); font-weight: 700; margin-top: 5px;">📱 SCAN TO OPEN ON PHONE</div>
+                            <div style="font-size: 0.8rem; color: var(--text-muted); font-weight: 400; margin-top: 5px;">{{ url }}</div>
+                        </div>
                     </div>
                 </div>
 
                 <div style="margin-bottom: 40px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="color: var(--accent);">⏳ Pending Review</h3>
-                        <button class="action-btn" onclick="clearPending()" style="font-size: 0.7rem; color: var(--text-muted);">🗑️ Clear All Pending</button>
+                        <div style="display:flex; align-items:center; gap:15px;">
+                            <h3 style="color: var(--accent); margin:0;">⏳ Pending Review</h3>
+                            <button id="btn-approve-all" class="action-btn" onclick="approveAll()" 
+                                style="background:rgba(34,197,94,0.15); border-color:var(--success); color:var(--success); font-weight:700; display:none;">
+                                ✅ Approve All Ready
+                            </button>
+                            <button id="btn-start-scan" class="action-btn" onclick="processQueued()" 
+                                style="background:rgba(59,130,246,0.15); border-color:#3b82f6; color:#3b82f6; font-weight:700; display:none;">
+                                🚀 Start AI Scan
+                            </button>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button class="action-btn" onclick="clearStuck()" style="font-size: 0.7rem; color: var(--accent); border-color: var(--accent);">🧹 Reset Stuck Tasks</button>
+                            <button class="action-btn" onclick="clearPending()" style="font-size: 0.7rem; color: var(--text-muted);">🗑️ Clear All Pending</button>
+                        </div>
                     </div>
                     <div class="table-container">
                         <table id="pending-table">
@@ -253,8 +331,21 @@
 
                 <div>
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-                        <h3 style="color: var(--success);">✅ Finalized Stock</h3>
-                        <button class="action-btn" onclick="exportExcel()">📊 Export All (Excel)</button>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <h3 style="color: var(--success); margin:0;">✅ Finalized Stock</h3>
+                            <label style="font-size:0.8rem; display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-muted);">
+                                <input type="checkbox" id="show-archived" onchange="loadLogs()" style="width:16px; height:16px;"> Show Archived
+                            </label>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <button class="action-btn" onclick="window.location.href='/api/export/pdf'" style="background:rgba(239,68,68,0.1); color:var(--primary); border-color:var(--primary);">
+                                <i class="fas fa-file-pdf"></i> Summary PDF
+                            </button>
+                            <button class="action-btn" onclick="window.location.href='/api/export/zip'" style="background:rgba(245,158,11,0.1); color:var(--accent); border-color:var(--accent);">
+                                <i class="fas fa-file-archive"></i> Backup (Photos + Data)
+                            </button>
+                            <button class="action-btn" onclick="exportExcel()" style="background:rgba(34,197,94,0.15); color:var(--success); border-color:var(--success); font-weight:700;">📥 Export to Excel</button>
+                        </div>
                     </div>
                     <div class="table-container">
                         <table id="history-table">
@@ -264,7 +355,7 @@
                                     <th>Supplier</th>
                                     <th>Items</th>
                                     <th>Total</th>
-                                    <th>Image</th>
+                                    <th>Image</th><th></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -277,6 +368,23 @@
         </div>
     </main>
 
+    
+        <!-- ARCHIVES VIEW -->
+        <div id="view-archives" class="tab-content">
+            <div class="glass-panel" style="padding: 30px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px;">
+                    <div>
+                        <h2 style="color:var(--accent);">📂 Stock Archives</h2>
+                        <p style="color:var(--text-muted); margin-top:-10px;">View historical stock data grouped by month.</p>
+                    </div>
+                    <button class="action-btn" onclick="exportExcel()" style="background:rgba(34, 197, 94, 0.1); border-color:var(--success); color:var(--success); font-weight:700; font-size:1rem; padding:10px 20px;">📥 Export to Excel</button>
+                </div>
+                <div id="archives-container">
+                    <!-- Monthly sections injected here -->
+                </div>
+            </div>
+        </div>
+
     <!-- DESKTOP REVIEW MODAL -->
     <div id="review-modal">
         <div class="glass-panel" style="width: 100%; max-width: 1200px; padding: 40px;">
@@ -285,22 +393,29 @@
                 <button onclick="closeReview()" style="background: none; border: none; color: white; cursor: pointer; font-size: 1.5rem;">✕</button>
             </div>
             
-            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px;">
-                <div style="border-radius: 15px; overflow: hidden; border: 2px solid var(--border-color); background: #000;">
-                    <img id="review-img" src="" style="width: 100%; display: block;" alt="Reference Photo">
+            <div style="display: grid; grid-template-columns: 1fr 1.5fr; gap: 40px; align-items: start;">
+                <div style="border-radius: 15px; overflow-y: auto; border: 2px solid var(--border-color); background: #000; max-height: 70vh; position: relative;">
+                    <div id="review-img-loading" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; background:#000; font-size:2rem;">⏳</div>
+                    <img id="review-img" src="" style="width: 100%; display: block;" alt="Reference Photo"
+                        onload="document.getElementById('review-img-loading').style.display='none'"
+                        onerror="document.getElementById('review-img-loading').innerHTML='❌ Image not found'">
                 </div>
                 <div style="display: flex; flex-direction: column;">
-                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 15px;">
                         <h3>Extracted Data</h3>
-                        <span id="ai-supplier" style="color:var(--accent); font-weight:700;"></span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <label style="color:var(--text-muted); font-size:0.9rem;">Supplier:</label>
+                            <input type="text" id="ai-supplier" class="review-input" style="width: 250px; font-weight: 700; color: var(--accent); border-color: var(--accent);" 
+                                onchange="currentReviewExtraction.supplier = this.value">
+                        </div>
                     </div>
                     <div id="review-items-container" style="flex: 1; overflow-y: auto; background: rgba(0,0,0,0.2); border-radius: 15px; padding: 15px;">
                         <table id="review-items-table">
                             <thead>
                                 <tr>
                                     <th>Description</th>
-                                    <th width="60">Qty</th>
-                                    <th width="60">Unit</th>
+                                    <th width="80">Qty</th>
+                                    <th width="80">Unit</th>
                                     <th width="100">Unit Price</th>
                                     <th width="100">Total</th>
                                 </tr>
@@ -324,7 +439,7 @@
             document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
             document.getElementById('view-' + viewId).classList.add('active');
             document.getElementById('tab-' + viewId).classList.add('active');
-            if(viewId === 'dashboard') loadLogs();
+            if(viewId === 'dashboard' || viewId === 'archives') loadLogs();
         }
 
         // --- Polling for Dashboard ---
@@ -344,38 +459,149 @@
             document.getElementById('scan-line').style.display = 'none';
         }
 
+        
         fileInput.addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
 
-            // Show preview
-            const reader = new FileReader();
-            reader.onload = (event) => {
-                document.getElementById('preview-img').src = event.target.result;
-                document.getElementById('preview-box').style.display = 'block';
-                document.getElementById('scan-line').style.display = 'block';
+            document.getElementById('preview-box').style.display = 'none';
+            document.getElementById('upload-status').innerHTML = `⏳ Batch Uploading ${files.length} files...`;
+            
+            let successCount = 0;
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                try {
+                    const res = await fetch('/upload', { method: 'POST', body: formData });
+                    if (res.ok) successCount++;
+                } catch (err) { console.error("Upload failed for", file.name); }
+                
+                document.getElementById('upload-status').innerText = `🚀 Uploading: ${successCount}/${files.length}`;
             }
-            reader.readAsDataURL(file);
 
-            // AUTO UPLOAD
-            const formData = new FormData();
-            formData.append('file', file);
-            document.getElementById('upload-status').innerText = "⏳ Sending to Desktop...";
-
-            try {
-                const res = await fetch('/upload', { method: 'POST', body: formData });
-                const result = await res.json();
-                if (res.ok) {
-                    document.getElementById('upload-status').innerHTML = "✅ Uploaded!<br><span style='color:var(--text-muted); font-size:0.9rem;'>AI is processing on desktop.</span>";
-                    document.getElementById('btn-next').classList.remove('hidden');
-                    document.getElementById('scan-line').style.display = 'none';
-                }
-            } catch (err) {
-                document.getElementById('upload-status').innerText = "❌ Connection Error";
-            }
+            document.getElementById('upload-status').innerHTML = `✅ ${successCount} Files Sent to Desktop!<br><span style='color:var(--text-muted); font-size:0.9rem;'>AI is processing them in the background.</span>`;
+            document.getElementById('btn-next').classList.remove('hidden');
         });
 
+
         // --- DASHBOARD LOGIC ---
+        
+        function showErrorToast(msg) {
+            const toast = document.getElementById('error-toast');
+            toast.textContent = '⚠️ ' + msg;
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 6000);
+        }
+
+        function viewImage(filename) {
+            document.getElementById('viewer-img').src = `/static/uploads/${filename}`;
+            document.getElementById('image-viewer-modal').style.display = 'flex';
+            document.body.classList.add('no-scroll');
+        }
+        function closeImageViewer() {
+            document.getElementById('image-viewer-modal').style.display = 'none';
+            document.body.classList.remove('no-scroll');
+        }
+
+        
+        
+        async function retryExtraction(filename) {
+            try {
+                const res = await fetch(`/api/retry/${filename}`, { method: 'POST' });
+                if(res.ok) loadLogs();
+            } catch(e) { alert("Retry failed"); }
+        }
+
+        async function archiveHistoryItem(filename) {
+            try {
+                const res = await fetch('/api/history/archive', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ filename })
+                });
+                if(res.ok) loadLogs();
+            } catch(e) { alert("Archive failed"); }
+        }
+
+        async function deleteHistoryItem(filename) {
+            if(!confirm("Delete this record forever?")) return;
+            try {
+                const res = await fetch('/api/history/delete', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ filename })
+                });
+                if(res.ok) {
+                    loadLogs();
+                } else {
+                    alert("Delete failed");
+                }
+            } catch(e) { alert("Error deleting"); }
+        }
+
+        
+        function renderArchives(data) {
+            const container = document.getElementById('archives-container');
+            container.innerHTML = '';
+            
+            const archivedItems = data.history.filter(h => h.archived);
+            if(archivedItems.length === 0) {
+                container.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text-muted);">No archived records yet.</div>';
+                return;
+            }
+
+            // Group by Month
+            const monthly = {};
+            archivedItems.forEach(h => {
+                const date = new Date(h.date);
+                const monthName = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                if(!monthly[monthName]) monthly[monthName] = [];
+                monthly[monthName].push(h);
+            });
+
+            // Render Monthly Sections
+            Object.keys(monthly).sort((a,b) => new Date(b) - new Date(a)).forEach(month => {
+                let monthHtml = `
+                    <div style="margin-bottom:40px;">
+                        <h3 style="border-bottom: 2px solid rgba(255,255,255,0.05); padding-bottom:10px; margin-bottom:20px; color:white;">🗓️ ${month}</h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Date</th>
+                                        <th>Supplier</th>
+                                        <th>Items</th>
+                                        <th>Total</th>
+                                        <th width="100">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                `;
+
+                monthly[month].sort((a,b) => b.date.localeCompare(a.date)).forEach(h => {
+                    monthHtml += `
+                        <tr>
+                            <td>${h.date}</td>
+                            <td style="font-weight:600;">${h.supplier}</td>
+                            <td>${h.item_count} pts</td>
+                            <td style="color:var(--success); font-weight:700;">R${h.total_value}</td>
+                            <td>
+                                <div style="display:flex; gap:10px;">
+                                    <button onclick="viewImage('${h.filename}')" class="action-btn" title="View Image">👁️</button>
+                                    <button onclick="deleteHistoryItem('${h.filename}')" class="action-btn" style="color:var(--primary)" title="Delete">🗑️</button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                monthHtml += `</tbody></table></div></div>`;
+                container.innerHTML += monthHtml;
+            });
+        }
+
         async function loadLogs(isPoll = false) {
             try {
                 const res = await fetch('/api/logs');
@@ -385,6 +611,9 @@
                 const pBody = document.querySelector('#pending-table tbody');
                 pBody.innerHTML = '';
                 const filenames = Object.keys(data.pending).sort((a,b) => b.localeCompare(a));
+                let processingCount = 0;
+                let readyCount = 0;
+                let queuedCount = 0;
                 
                 if (filenames.length === 0) {
                     pBody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">No new scans waiting</td></tr>';
@@ -393,17 +622,51 @@
                 filenames.forEach(fn => {
                     const item = data.pending[fn];
                     let statusClass = 'badge-processing';
-                    let statusLabel = 'Processing...';
+                    let statusLabel = '⏳ Processing...';
                     let actionHtml = '';
-
-                    if (item.status === 'ready') {
-                        statusClass = 'badge-pending';
-                        statusLabel = 'Ready for Review';
-                        actionHtml = `<button class="action-btn" onclick="openReview('${fn}')">👁️ Review</button>`;
+                    if (item.status === 'processing') processingCount++;
+                    if (item.status === 'queued') {
+                        queuedCount++;
+                        statusClass = 'badge-queued';
+                        statusLabel = '📥 Uploaded';
+                        actionHtml = '';
+                    } else if (item.status === 'ready') {
+                        readyCount++;
+                        const d = item.data || {};
+                        const itemCount = (d.items || []).length;
+                        const total = parseFloat(d.total_amount) || 0;
+                        const supplier = (d.supplier || '').trim();
+                        
+                        // Flag uncertain: missing supplier, no items, or no total amount
+                        const isUncertain = !supplier || itemCount === 0 || total === 0;
+                        
+                        if (isUncertain) {
+                            statusClass = 'badge-pending';
+                            statusLabel = '⚠️ Needs Review';
+                            actionHtml = `
+                                <div style="display:flex; gap:5px; align-items:center;">
+                                    <span style="font-size:0.7rem; color:var(--accent);">Uncertain</span>
+                                    <button class="action-btn" style="border-color:var(--accent); color:var(--accent);" onclick="openReview('${fn}')">👀 Review</button>
+                                </div>
+                            `;
+                        } else {
+                            statusClass = 'badge-done';
+                            statusLabel = '✅ Ready';
+                            actionHtml = `
+                                <div style="display:flex; gap:5px;">
+                                    <button class="action-btn" onclick="openReview('${fn}')">👁️ Review</button>
+                                </div>
+                            `;
+                        }
                     } else if (item.status === 'failed') {
-                        statusClass = 'badge-pending'; // using same color
+                        statusClass = 'badge-pending';
                         statusLabel = 'AI Error';
-                        actionHtml = `<button class="action-btn" style="color:var(--primary)" onclick="alert('${item.error}')">⚠️ Log</button>`;
+                        actionHtml = `
+                            <div style="display:flex; gap:5px;">
+                                <button class="action-btn" style="color:var(--primary)" onclick="showErrorToast(this.dataset.err)" data-err="${(item.error||'').replace(/"/g,'&quot;').substring(0,300)}">⚠️ Log</button>
+                                <button class="action-btn" onclick="retryExtraction('${fn}')" title="Retry AI Extraction">🔄 Retry</button>
+                            </div>
+                        `;
                     }
 
                     pBody.innerHTML += `
@@ -416,26 +679,145 @@
                     `;
                 });
 
+                renderArchives(data);
+
+                // Update processing counter badge
+                const counter = document.getElementById('processing-counter');
+                const counterText = document.getElementById('processing-count-text');
+                if (processingCount > 0) {
+                    counter.style.display = 'inline-flex';
+                    counterText.textContent = `${processingCount} Processing...`;
+                } else {
+                    counter.style.display = 'none';
+                }
+
+                // Show/hide Approve All button
+                const approveAllBtn = document.getElementById('btn-approve-all');
+                if (readyCount > 0) {
+                    approveAllBtn.style.display = 'inline-flex';
+                    approveAllBtn.textContent = `✅ Approve All Ready (${readyCount})`;
+                } else {
+                    approveAllBtn.style.display = 'none';
+                }
+
+                // Show/hide Start AI Scan button
+                const scanBtn = document.getElementById('btn-start-scan');
+                if (queuedCount > 0) {
+                    scanBtn.style.display = 'inline-flex';
+                    scanBtn.textContent = `🚀 Start AI Scan (${queuedCount})`;
+                } else {
+                    scanBtn.style.display = 'none';
+                }
+
                 // History Table
                 const hBody = document.querySelector('#history-table tbody');
                 hBody.innerHTML = '';
                 if (data.history.length === 0) {
-                    hBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">No history yet</td></tr>';
+                    hBody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--text-muted);">No finalized records found</td></tr>';
+                } else {
+                    // Grouping
+                    const showArchived = document.getElementById('show-archived').checked;
+                    const grouped = {};
+                    data.history.forEach(h => {
+                        if (h.archived && !showArchived) return;
+                        const s = (h.supplier || "Unknown Supplier").toUpperCase();
+                        if(!grouped[s]) grouped[s] = [];
+                        grouped[s].push(h);
+                    });
+
+                    // Sort suppliers alphabetically
+                    const suppliers = Object.keys(grouped).sort();
+                    
+                    suppliers.forEach((s, idx) => {
+                        // Header row for Supplier
+                        hBody.innerHTML += `
+                            <tr style="background: rgba(255,255,255,0.03);">
+                                <td colspan="6" style="padding: 10px 15px; font-weight: 800; color: var(--accent); border-left: 4px solid var(--accent);">🏢 ${s}</td>
+                            </tr>
+                        `;
+
+                        // Data rows
+                        grouped[s].sort((a,b) => b.date.localeCompare(a.date)).forEach(h => {
+                            hBody.innerHTML += `
+                                <tr>
+                                    <td>${h.date}</td>
+                                    <td style="color:var(--text-muted); font-size:0.8rem;">${h.supplier}</td>
+                                    <td><span style="background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:4px;">${h.item_count} items</span></td>
+                                    <td style="font-weight:700; color:var(--success);">R${h.total_value}</td>
+                                    <td>
+                                        <button onclick="viewImage('${h.filename}')" style="background:none; border:none; color:var(--accent); cursor:pointer; font-size:0.85rem; display:flex; align-items:center; gap:5px;">
+                                            <i class="fas fa-image"></i> 👁️ View
+                                        </button>
+                                    </td>
+                                    <td style="text-align:right;">
+                                        <button onclick="archiveHistoryItem('${h.filename}')" style="background:none; border:none; color:var(--text-muted); cursor:pointer; font-size:0.85rem;" title="Archive">📦</button> <button onclick="deleteHistoryItem('${h.filename}')" style="background:none; border:none; color:#ef4444; opacity:0.5; cursor:pointer;" title="Delete">🗑️</button>
+                                    </td>
+                                </tr>
+                            `;
+                        });
+
+                        // Add spacer row
+                        hBody.innerHTML += `<tr style="height:25px;"><td colspan="6"></td></tr>`;
+                    });
                 }
-                data.history.sort((a,b) => b.date.localeCompare(a.date)).forEach(h => {
-                    hBody.innerHTML += `
-                        <tr>
-                            <td>${h.date}</td>
-                            <td style="font-weight:600;">${h.supplier}</td>
-                            <td>${h.item_count} pts</td>
-                            <td>R${h.total_value}</td>
-                            <td><a href="/static/uploads/${h.filename}" target="_blank" style="color:var(--accent); font-size:0.8rem;">📎 Image</a></td>
-                        </tr>
-                    `;
-                });
 
             } catch (e) {
                 console.error("Dashboard poll failed", e);
+            }
+        }
+
+        async function processQueued() {
+            const btn = document.getElementById('btn-start-scan');
+            btn.disabled = true;
+            btn.textContent = '⏳ Starting...';
+            try {
+                const res = await fetch('/api/process_queued', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showErrorToast(`🚀 AI scanning started for ${data.started} invoices!`);
+                    loadLogs();
+                } else {
+                    showErrorToast('Failed to start: ' + (data.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = '🚀 Start AI Scan';
+                }
+            } catch(e) {
+                showErrorToast('Connection error.');
+                btn.disabled = false;
+                btn.textContent = '🚀 Start AI Scan';
+            }
+        }
+
+        async function approveAll() {
+            const btn = document.getElementById('btn-approve-all');
+            const originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ Approving...';
+
+            try {
+                const res = await fetch('/api/confirm_all', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    showErrorToast(`✅ ${data.approved} items approved! ${data.skipped} flagged for manual review.`);
+                    loadLogs();
+                } else {
+                    showErrorToast('Approval failed: ' + (data.error || 'Unknown error'));
+                }
+            } catch (e) {
+                showErrorToast('Connection error during approval.');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+        }
+
+        async function clearStuck() {
+            if(!confirm("Reset all items stuck in 'Processing' status?")) return;
+            const res = await fetch('/api/clear_stuck', { method: 'POST' });
+            if(res.ok) {
+                const data = await res.json();
+                alert(data.message);
+                loadLogs();
             }
         }
 
@@ -453,31 +835,36 @@
             
             currentReviewExtraction = pending.data;
 
-            document.getElementById('review-img').src = `/static/uploads/${filename}`;
-            document.getElementById('ai-supplier').innerText = currentReviewExtraction.supplier;
+            // Reset image loading state
+            document.getElementById('review-img-loading').style.display = 'flex';
+            // Add cache-buster to force browser to reload the image
+            document.getElementById('review-img').src = `/static/uploads/${filename}?t=${Date.now()}`;
+            document.getElementById('ai-supplier').value = currentReviewExtraction.supplier || '';
             
             const tbody = document.querySelector('#review-items-table tbody');
             tbody.innerHTML = '';
-            currentReviewExtraction.items.forEach((item, idx) => {
-                tbody.innerHTML += `
-                    <tr>
-                        <td><input type="text" class="action-btn" style="width:100%; border:none; background:none;" value="${item.description}" 
-                            onchange="currentReviewExtraction.items[${idx}].description = this.value"></td>
-                        <td><input type="text" class="action-btn" style="width:100%; border:none; background:none;" value="${item.qty}"
-                            onchange="currentReviewExtraction.items[${idx}].qty = this.value"></td>
-                        <td><input type="text" class="action-btn" style="width:100%; border:none; background:none;" value="${item.unit || ''}"
-                            onchange="currentReviewExtraction.items[${idx}].unit = this.value"></td>
-                        <td>R${item.unit_price}</td>
-                        <td style="font-weight:600;">R${item.total_price}</td>
-                    </tr>
-                `;
-            });
+                currentReviewExtraction.items.forEach((item, idx) => {
+                    tbody.innerHTML += `
+                        <tr>
+                            <td><input type="text" class="review-input" value="${item.description}" 
+                                onchange="currentReviewExtraction.items[${idx}].description = this.value"></td>
+                            <td><input type="text" class="review-input" value="${item.qty || 1}"
+                                onchange="currentReviewExtraction.items[${idx}].qty = this.value"></td>
+                            <td><input type="text" class="review-input" value="${item.unit || 'unit'}"
+                                onchange="currentReviewExtraction.items[${idx}].unit = this.value"></td>
+                            <td style="font-size: 0.9rem;">R${item.unit_price}</td>
+                            <td style="font-weight:600; font-size: 0.9rem;">R${item.total_price}</td>
+                        </tr>
+                    `;
+                });
 
             document.getElementById('review-modal').style.display = 'flex';
+            document.body.classList.add('no-scroll');
         }
 
         function closeReview() {
             document.getElementById('review-modal').style.display = 'none';
+            document.body.classList.remove('no-scroll');
         }
 
         async function pushToFinal() {
@@ -510,11 +897,29 @@
         }
 
         window.exportExcel = () => {
-            window.location.href = '/api/export';
+            // Force a fresh download every time — no browser caching
+            const url = '/api/export?t=' + Date.now();
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = '';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
         };
 
         // Initial Load
         loadLogs();
     </script>
+
+    <!-- IMAGE VIEWER MODAL -->
+    <div id="image-viewer-modal" onclick="closeImageViewer()">
+        <div style="position:relative; max-width:100%; width: 100%; max-width: 1000px;">
+            <img id="viewer-img" src="" style="width: 100%; border-radius:10px; box-shadow:0 0 50px rgba(0,0,0,1);">
+            <button onclick="closeImageViewer()" style="position:absolute; top:-40px; right:0; background:none; border:none; color:white; font-size:2rem; cursor:pointer;">&times;</button>
+        </div>
+    </div>
+
 </body>
+<!-- ERROR TOAST -->
+<div id="error-toast" class="error-toast"></div>
 </html>
